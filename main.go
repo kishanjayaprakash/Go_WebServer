@@ -1,9 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
-	"encoding/json"
+	"sync"
 )
 
 type User struct {
@@ -12,6 +13,8 @@ type User struct {
 }
 
 var usercache = make(map[int]User) // in-memory database, key is user id and value is User struct
+
+var cachemutex sync.RWMutex // mutex to protect access to the usercache map
 
 func main() {
 	mux := http.NewServeMux() //router that matches incoming requests to their respective handlers
@@ -44,6 +47,8 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Name is required", http.StatusBadRequest)
 		return
 	}
+	cachemutex.Lock() // locks the mutex to ensure that only one goroutine can access the usercache map at a time
 	usercache[len(usercache)+1] = user // adds the user to the usercache map with a new id
+	cachemutex.Unlock() // unlocks the mutex after the user has been added to the map
 	w.WriteHeader(http.StatusNoContent) 
 }
