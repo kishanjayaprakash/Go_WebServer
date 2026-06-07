@@ -24,7 +24,9 @@ func main() {
 
     mux.HandleFunc( "POST /users", createUser) // routes "POST /users" requests to createUser function
     mux.HandleFunc("GET /users/{id}", getUser) // routes "GET /users/{id}" requests to getUser function
-
+    mux.HandleFunc("DELETE /users/{id}", deleteUser) // routes "DELETE /users/{id}" requests to deleteUser function
+	
+	
 	fmt.Println("Server is running on http://localhost:8080") // prints a message to the console indicating that the server is running
 	err := http.ListenAndServe(":8080", mux)  
 	if err != nil {
@@ -62,7 +64,22 @@ func getUser(w http.ResponseWriter, r *http.Request) {
 	
 }
 
-// runs when POST /users is called
+func deleteUser(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+		return
+	}
+	if _, ok := usercache[id]; !ok {
+		http.Error(w, "User not found", http.StatusNotFound)
+		return
+	}
+	cachemutex.Lock() // locks the mutex to ensure that only one goroutine can access the usercache map at a time
+	delete(usercache, id) // deletes the user from the usercache map
+	cachemutex.Unlock() // unlocks the mutex after the user has been deleted from the map
+	w.WriteHeader(http.StatusNoContent) // sets the HTTP status code to 204 No Content to indicate that the user has been successfully deleted
+}
+	// runs when POST /users is called
 func createUser(w http.ResponseWriter, r *http.Request) {
 	var user User
 	err := json.NewDecoder(r.Body).Decode(&user) // decodes the JSON request body into a User struct
