@@ -10,12 +10,12 @@ import (
 
 // Visitor struct to track the number of requests and the last seen time for each IP address
 type Visitor struct {
-	count int
+	count    int
 	lastSeen time.Time
 }
 
 var (
-	visitors = make(map[string]*Visitor) // Map to store visitors with their IP as the key
+	visitors      = make(map[string]*Visitor) // Map to store visitors with their IP as the key
 	visitorsMutex sync.Mutex                  // Mutex to protect access to the visitors mapMutex
 )
 
@@ -33,6 +33,13 @@ func RateLimitMiddleware(next http.Handler) http.Handler {
 		if !exists {
 			visitors[ip] = &Visitor{count: 1, lastSeen: now} // If the visitor is new, create a new Visitor entry
 			visitorsMutex.Unlock()                           // changed visitorMutex to visitorsMutex
+			next.ServeHTTP(w, r)
+			return
+		}
+		if now.Sub(v.lastSeen) > time.Minute { // if the last request was more than 1 minute ago, reset the counter
+			v.count = 1
+			v.lastSeen = now
+			visitorsMutex.Unlock()
 			next.ServeHTTP(w, r)
 			return
 		}

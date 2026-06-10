@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -13,7 +14,7 @@ import (
 
 // User struct now includes a MongoDB ObjectID field; bson tags control how fields are stored in MongoDB
 type User struct {
-	ID   int `bson:"_id" json:"id"`
+	ID   int    `bson:"_id" json:"id"`
 	Name string `bson:"name" json:"name"`
 }
 
@@ -44,21 +45,21 @@ func handleRoot(w http.ResponseWriter, r *http.Request) {
 }
 
 func getUser(w http.ResponseWriter, r *http.Request) {
-	oid, err := bson.ObjectIDFromHex(r.PathValue("id")) // parse the hex string ID from the URL into a MongoDB ObjectID
+	id, err := strconv.Atoi(r.PathValue("id")) // parse the string ID from the URL into an integer
 	if err != nil {
 		http.Error(w, "Invalid user ID", http.StatusBadRequest)
 		return
 	}
 
-	fmt.Printf("[GET] Request received for ID: %s\n", oid.Hex()) // Diagnostic log
+	fmt.Printf("[GET] Request received for ID: %d\n", id) // Diagnostic log
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	var user User
-	err = userCol.FindOne(ctx, bson.M{"_id": oid}).Decode(&user) // query MongoDB for the user with the given ID
+	err = userCol.FindOne(ctx, bson.M{"_id": id}).Decode(&user) // query MongoDB for the user with the given ID
 	if err == mongo.ErrNoDocuments {
-		fmt.Printf("[GET] User with ID %s was NOT found in database\n", oid.Hex()) // Diagnostic log
+		fmt.Printf("[GET] User with ID %d was NOT found in database\n", id) // Diagnostic log
 		http.Error(w, "User not found", http.StatusNotFound)
 		return
 	} else if err != nil {
@@ -78,7 +79,7 @@ func getUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func deleteUser(w http.ResponseWriter, r *http.Request) {
-	oid, err := bson.ObjectIDFromHex(r.PathValue("id")) // parse the hex string ID from the URL into a MongoDB ObjectID
+	id, err := strconv.Atoi(r.PathValue("id")) // parse the string ID from the URL into an integer
 	if err != nil {
 		http.Error(w, "Invalid user ID", http.StatusBadRequest)
 		return
@@ -87,7 +88,7 @@ func deleteUser(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	result, err := userCol.DeleteOne(ctx, bson.M{"_id": oid}) // delete the user from MongoDB with the given ID
+	result, err := userCol.DeleteOne(ctx, bson.M{"_id": id}) // delete the user from MongoDB with the given ID
 	if err != nil {
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
@@ -115,19 +116,25 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	id, err := getNextID() // generate the next auto-incremented integer ID from the counters collection
+	if err != nil {
+		http.Error(w, "Failed to generate user ID", http.StatusInternalServerError)
+		return
+	}
+	user.ID = id // assign the generated ID to the user before inserting into MongoDB
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	result, err := userCol.InsertOne(ctx, user) // inserts the new user into MongoDB and gets back the generated ID
+	_, err = userCol.InsertOne(ctx, user) // inserts the new user into MongoDB and gets back the generated ID
 	if err != nil {
 		http.Error(w, "Failed to create user", http.StatusInternalServerError)
 		return
 	}
 
-	user.ID = result.InsertedID.(int)      // attach the generated MongoDB ObjectID back onto the user struct
 	fmt.Printf("[POST] Successfully saved user '%s' with ID: %d\n", user.Name, user.ID) // Diagnostic log
 
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)  // sets the HTTP status code to 201 Created to indicate the user was successfully created
-	json.NewEncoder(w).Encode(user)    // sends the newly created user (including their MongoDB ID) back to the client
+	w.WriteHeader(http.StatusCreated) // sets the HTTP status code to 201 Created to indicate the user was successfully created
+	json.NewEncoder(w).Encode(user)   // sends the newly created user (including their MongoDB ID) back to the client
 }
