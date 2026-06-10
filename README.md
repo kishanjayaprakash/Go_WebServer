@@ -4,7 +4,7 @@ A lightweight HTTP web server written in Go with IP-based rate limiting and full
 
 ## Features
 
-- IP-based rate limiting (15 requests per minute)
+- IP-based rate limiting (15 requests)
 - Track last seen timestamp per IP
 - User management (Create, Read, Delete)
 - Thread-safe visitor tracking with mutex
@@ -17,7 +17,7 @@ Every incoming request is tracked by IP address.
 
 | Rule | Value |
 |------|-------|
-| Max requests | 15 per IP per minute |
+| Max requests | 15 per IP  |
 | Exceeded response | 429 Too Many Requests |
 
 How it works:
